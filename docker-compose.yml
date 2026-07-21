@@ -1,0 +1,26 @@
+# Enterprise Data Copilot — Docker Compose
+# Services: postgres (with pgvector), backend (FastAPI), frontend (React)
+# Usage: docker-compose up -d
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: copilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: copilot_db
+      POSTGRES_USER: copilot
+      POSTGRES_PASSWORD: copilot_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U copilot -d copilot_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

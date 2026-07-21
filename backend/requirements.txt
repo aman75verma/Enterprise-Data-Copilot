@@ -1,0 +1,33 @@
+# Enterprise Data Copilot — Backend Dependencies
+
+# Web framework
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+
+# Database
+psycopg2-binary==2.9.10
+
+# Data generation
+faker==37.3.0
+
+# Environment
+python-dotenv==1.1.0
+
+# HTTP client (for GitHub API)
+httpx==0.28.1
+
+# LLM — Groq
+groq==0.25.0
+
+# Embeddings (added in Chunk 2)
+# sentence-transformers==4.1.0
+# torch (CPU)
+
+# MCP SDK (added in Chunk 4)
+# mcp[cli]
+
+# SSE streaming
+sse-starlette==2.3.6
+
+# Data validation
+pydantic==2.11.4
