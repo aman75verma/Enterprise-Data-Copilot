@@ -116,6 +116,13 @@
   4. OK with `all-MiniLM-L6-v2` for embeddings?
   5. Vite as React bundler?
 
+### 2026-07-22 — Database Layer Redesign (SaaS/BaaS Model)
+- **Architectural Change**: Remodeled the database schema to reflect a Supabase-like BaaS platform.
+- **Added Entities**: `organizations`, `projects`, `usage_metrics`.
+- **Refactored Entities**: Moved `subscriptions` and `invoices` to organizations. Added `project_id` and `affected_product` to tickets.
+- **Seed Script**: Rewrote `seed.py` completely to generate story-driven, coherent data (e.g., quota warnings for high storage).
+- **Documentation**: Updated `Enterprise Data Copilot.md` and `Project Chunks.md` to match new specifications. Created `docs/data_architecture.md`.
+
 ---
 
 ## File Structure (Planned)

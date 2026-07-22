@@ -4,7 +4,7 @@
 ## 1. What This Project Is
 
 A chat assistant that answers questions across **three different types of data sources**:
-1. A **SQL database** (structured data — e.g. orders, users, employees, whatever domain you pick)
+1. A **SQL database** (structured data — e.g. organizations, projects, usage metrics, support tickets)
 2. A pile of **unstructured documents** (PDFs, docs — company policies, reports, manuals)
 3. A **live external API** (e.g. GitHub, weather, a public dataset)
 
@@ -112,8 +112,8 @@ Don't try to learn everything first — learn just enough to start, then go deep
 You said you'll use AI agents to build this but want to actually understand it. Here's the split that keeps you honest — **you own the decisions and the debugging, the AI accelerates the typing.**
 
 ### Phase 0 — Design (100% you, no AI)
-- [ ] Pick your domain (e.g. "internal HR assistant", "e-commerce support bot", "personal finance copilot"). A concrete domain makes the SQL schema and documents meaningful.
-- [ ] Sketch your own DB schema on paper (3-5 tables) before asking AI to generate anything. You must be able to explain every foreign key in an interview.
+- [x] Domain is locked to an Internal Support Copilot for a SaaS product (Supabase reference). The SQL schema and documents reflect this.
+- [x] Sketch your own DB schema on paper (model Customer -> Organization -> Project -> Usage hierarchy). You must be able to explain every foreign key in an interview.
 - [ ] Write down, in your own words, what "routing" means and why it's better than naive RAG. If you can't explain this without notes, you don't own the project yet.
 
 ### Phase 1 — Scaffolding (AI-assisted, you review every file)

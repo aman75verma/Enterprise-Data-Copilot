@@ -1,24 +1,18 @@
 """
-Enterprise Data Copilot — Seed Script
-Generates realistic synthetic data for all 6 business tables.
+Enterprise Data Copilot — Seed Script (SaaS/BaaS Model)
+Generates realistic story-driven synthetic data for the Supabase-like schema.
 
 Usage:
     python seed.py
 
 Requires:
     pip install faker psycopg2-binary python-dotenv
-
-Data distribution (from spec):
-    - 50 customers (mix of all 4 plans)
-    - 50 subscriptions (1 per customer, ~10% past_due/cancelled)
-    - 150 invoices (2-4 per customer, ~15% failed/pending)
-    - 5 agents
-    - 80 tickets (spread across categories/statuses)
-    - 200 ticket_messages (2-4 per ticket)
 """
 
 import os
 import random
+import uuid
+import string
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -51,14 +45,11 @@ def get_connection():
 # Configuration
 # ---------------------------------------------------------
 NUM_CUSTOMERS = 50
+NUM_ORGS = 40
+NUM_PROJECTS = 80
 NUM_AGENTS = 5
-NUM_TICKETS = 80
-NUM_TICKET_MESSAGES = 200
-INVOICES_PER_CUSTOMER = (2, 4)  # min, max
 
 PLANS = ["free", "pro", "team", "enterprise"]
-PLAN_WEIGHTS = [0.30, 0.35, 0.20, 0.15]  # distribution
-
 PLAN_MRR = {
     "free": Decimal("0.00"),
     "pro": Decimal("25.00"),
@@ -66,192 +57,200 @@ PLAN_MRR = {
     "enterprise": Decimal("499.00"),
 }
 
-SUB_STATUSES = ["active", "past_due", "cancelled", "trialing"]
-SUB_STATUS_WEIGHTS = [0.70, 0.05, 0.05, 0.20]  # ~10% past_due/cancelled
-
-INVOICE_STATUSES = ["paid", "pending", "failed", "refunded"]
-INVOICE_STATUS_WEIGHTS = [0.75, 0.10, 0.05, 0.10]  # ~15% non-paid
-
-TICKET_CATEGORIES = ["billing", "technical", "account", "feature_request", "bug"]
-TICKET_STATUSES = ["open", "in_progress", "resolved", "closed"]
-TICKET_PRIORITIES = ["low", "medium", "high", "urgent"]
-
-# Realistic ticket subjects for a SaaS support system
-TICKET_SUBJECTS = [
-    "Can't connect to database",
-    "Billing charged twice",
-    "How do I add RLS policy",
-    "Connection timeout on edge functions",
-    "Storage bucket permission denied",
-    "Can't reset password",
-    "API rate limit hit unexpectedly",
-    "Dashboard loading slow",
-    "Migration failed on production",
-    "Row level security not working",
-    "Webhook not firing",
-    "Can't invite team member",
-    "Invoice amount seems wrong",
-    "Need to upgrade plan",
-    "Database backup not working",
-    "Realtime subscription dropping",
-    "Auth redirect loop",
-    "SSL certificate error",
-    "Function deployment failed",
-    "Can't delete project",
-    "Storage upload size limit",
-    "PostgREST returning 500",
-    "Need help with database schema",
-    "Email confirmation not sent",
-    "Two-factor auth locked out",
-    "Cron job not executing",
-    "Read replica lag too high",
-    "Need custom domain setup",
-    "API returns wrong data format",
-    "Supabase CLI not connecting",
-    "Database disk usage growing fast",
-    "Can't access logs",
-    "Need to transfer project ownership",
-    "Branching not working",
-    "Foreign key constraint error",
-    "Full text search not returning results",
-    "GraphQL endpoint not responding",
-    "Need help with triggers",
-    "Subscription renewal failed",
-    "Account locked after failed payments",
-]
-
-# Realistic agent/customer message templates
-CUSTOMER_MESSAGES = [
-    "Hi, I'm having trouble with {subject}. Can you help?",
-    "This issue has been happening since yesterday. {subject}.",
-    "I've already tried restarting but the problem persists.",
-    "This is affecting our production system. Please prioritize.",
-    "Thanks for looking into this. Any update?",
-    "I've attached screenshots showing the error.",
-    "Can you escalate this? It's been open for a while.",
-    "We're a paying customer and this is impacting our business.",
-    "Is there a workaround in the meantime?",
-    "The error message says: connection refused.",
-]
-
-AGENT_MESSAGES = [
-    "Hi! I'm looking into this for you now.",
-    "Could you share the error logs from your dashboard?",
-    "I've identified the issue. Let me apply a fix.",
-    "This is a known issue and our team is working on it.",
-    "I've escalated this to our engineering team.",
-    "The fix has been deployed. Can you verify it's working?",
-    "This should be resolved now. Please let me know if it recurs.",
-    "I'm going to need a bit more information to debug this.",
-    "We've released a patch for this. Please try again.",
-    "Closing this ticket as resolved. Don't hesitate to reopen if needed.",
-]
-
 COMPANIES = [
     "Acme Corp", "TechStart Inc", "DataFlow Systems", "CloudNine Labs",
     "Pixel Perfect", "Quantum Dynamics", "NexGen Solutions", "ByteForce",
     "InnovateTech", "ScaleUp Studios", "DevOps Pro", "CodeCraft",
     "StackHero", "LaunchPad AI", "Serverless Co", "MicroSaaS Ltd",
     "AppForge", "DataHive Analytics", "CloudBridge", "TurboAPI",
-    None, None, None, None, None,  # ~20% have no company
 ]
+
+REGIONS = ["us-east-1", "us-west-1", "eu-central-1", "ap-southeast-1"]
+PG_VERSIONS = ["14", "15", "16"]
+PRODUCTS = ['Auth', 'Database', 'Storage', 'Edge Functions', 'Realtime', 'Dashboard', 'Billing', 'CLI', 'Other']
+
+
+def random_project_ref():
+    return ''.join(random.choices(string.ascii_lowercase, k=20))
 
 
 def seed_customers(cur):
-    """Generate 50 customers with realistic distribution."""
     print("  Seeding customers...")
     customers = []
-    for i in range(NUM_CUSTOMERS):
-        plan = random.choices(PLANS, weights=PLAN_WEIGHTS, k=1)[0]
+    for _ in range(NUM_CUSTOMERS):
         signup_date = fake.date_between(start_date="-2y", end_date="-30d")
-        company = random.choice(COMPANIES)
+        company = random.choice(COMPANIES + [None] * 5)
         name = fake.name()
         email = f"{name.lower().replace(' ', '.')}@{fake.free_email_domain()}"
+        country = fake.country_code()
+        timezone = fake.timezone()
 
         cur.execute(
             """
-            INSERT INTO customers (name, email, company, signup_date, plan)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO customers (name, email, company, country, timezone, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
-            (name, email, company, signup_date, plan),
+            (name, email, company, country, timezone, signup_date),
         )
-        customer_id = cur.fetchone()[0]
-        customers.append({
-            "id": customer_id,
-            "plan": plan,
-            "signup_date": signup_date,
-        })
+        customers.append(cur.fetchone()[0])
     print(f"    [OK] {NUM_CUSTOMERS} customers created")
     return customers
 
 
-def seed_subscriptions(cur, customers):
-    """Generate 1 subscription per customer."""
-    print("  Seeding subscriptions...")
-    for c in customers:
-        status = random.choices(SUB_STATUSES, weights=SUB_STATUS_WEIGHTS, k=1)[0]
-        mrr = PLAN_MRR[c["plan"]]
-        started_at = c["signup_date"]
-        renewal_date = None
-        if status in ("active", "trialing"):
-            renewal_date = fake.date_between(start_date="+1d", end_date="+90d")
+def seed_organizations(cur, customers):
+    print("  Seeding organizations...")
+    orgs = []
+    # Assign owners from a pool of customers
+    owners = random.sample(customers, NUM_ORGS)
+    for owner_id in owners:
+        created_at = fake.date_between(start_date="-2y", end_date="-30d")
+        name = f"{fake.company()} Org"
+        billing_email = f"billing@{fake.domain_name()}"
 
         cur.execute(
             """
-            INSERT INTO subscriptions (customer_id, plan_name, status, mrr, renewal_date, started_at)
+            INSERT INTO organizations (name, billing_email, owner_customer_id, created_at)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+            """,
+            (name, billing_email, owner_id, created_at),
+        )
+        orgs.append({
+            "id": cur.fetchone()[0],
+            "owner_id": owner_id,
+            "created_at": created_at
+        })
+    print(f"    [OK] {NUM_ORGS} organizations created")
+    return orgs
+
+
+def seed_projects_and_usage(cur, orgs):
+    print("  Seeding projects & usage metrics...")
+    projects = []
+    
+    for i in range(NUM_PROJECTS):
+        org = random.choice(orgs)
+        created_at = fake.date_between(start_date=org["created_at"], end_date="-10d")
+        project_ref = random_project_ref()
+        project_name = f"{fake.word().capitalize()} App"
+        region = random.choice(REGIONS)
+        postgres_version = random.choice(PG_VERSIONS)
+        status = random.choices(['active', 'paused', 'suspended', 'coming_up'], weights=[0.8, 0.1, 0.05, 0.05])[0]
+
+        cur.execute(
+            """
+            INSERT INTO projects (organization_id, project_ref, project_name, region, postgres_version, status, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (org["id"], project_ref, project_name, region, postgres_version, status, created_at),
+        )
+        project_id = cur.fetchone()[0]
+
+        # Generate realistic usage
+        if status == 'active':
+            db_size = round(random.uniform(0.1, 50.0), 2)
+            storage = round(random.uniform(0.1, 100.0), 2)
+            bandwidth = round(random.uniform(1.0, 500.0), 2)
+            api_reqs = random.randint(1000, 10000000)
+            users = random.randint(10, 50000)
+        else:
+            db_size = round(random.uniform(0.1, 5.0), 2)
+            storage = round(random.uniform(0.1, 10.0), 2)
+            bandwidth = 0
+            api_reqs = 0
+            users = 0
+
+        cur.execute(
+            """
+            INSERT INTO usage_metrics (project_id, database_size_gb, storage_gb, bandwidth_gb, api_requests, active_users)
             VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (c["id"], c["plan"], status, mrr, renewal_date, started_at),
+            (project_id, db_size, storage, bandwidth, api_reqs, users),
         )
-    print(f"    [OK] {len(customers)} subscriptions created")
+
+        projects.append({
+            "id": project_id,
+            "org_id": org["id"],
+            "owner_id": org["owner_id"],
+            "db_size": db_size,
+            "storage": storage,
+            "api_reqs": api_reqs,
+            "pg_version": postgres_version,
+            "status": status,
+            "created_at": created_at
+        })
+        
+    print(f"    [OK] {NUM_PROJECTS} projects and usage metrics created")
+    return projects
 
 
-def seed_invoices(cur, customers):
-    """Generate 2-4 invoices per customer (150 total target)."""
-    print("  Seeding invoices...")
-    count = 0
-    for c in customers:
-        num_invoices = random.randint(*INVOICES_PER_CUSTOMER)
-        base_amount = float(PLAN_MRR[c["plan"]]) if PLAN_MRR[c["plan"]] > 0 else random.uniform(5, 25)
+def seed_subscriptions_and_invoices(cur, orgs, projects):
+    print("  Seeding subscriptions & invoices...")
+    invoices_count = 0
+    org_plans = {}
+    
+    for org in orgs:
+        # Determine plan based on project usage
+        org_projects = [p for p in projects if p["org_id"] == org["id"]]
+        total_db_size = sum(p["db_size"] for p in org_projects)
+        total_storage = sum(p["storage"] for p in org_projects)
+        
+        if total_db_size > 20 or total_storage > 50:
+            plan = random.choice(["team", "enterprise"])
+        elif total_db_size > 5 or total_storage > 5:
+            plan = "pro"
+        else:
+            plan = "free"
+            
+        org_plans[org["id"]] = plan
+        status = random.choices(["active", "past_due", "cancelled"], weights=[0.85, 0.1, 0.05])[0]
+        started_at = org["created_at"]
+        renewal_date = fake.date_between(start_date="+1d", end_date="+30d") if status == "active" else None
+        
+        cur.execute(
+            """
+            INSERT INTO subscriptions (organization_id, plan, status, monthly_cost, renewal_date, started_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (org["id"], plan, status, PLAN_MRR[plan], renewal_date, started_at),
+        )
 
-        for j in range(num_invoices):
-            status = random.choices(INVOICE_STATUSES, weights=INVOICE_STATUS_WEIGHTS, k=1)[0]
-            amount = round(base_amount * random.uniform(0.8, 1.2), 2)
-            due_date = fake.date_between(start_date=c["signup_date"], end_date="today")
-            paid_at = None
-            if status == "paid":
-                paid_at = datetime.combine(due_date, datetime.min.time()) + timedelta(
-                    days=random.randint(0, 5)
+        # Generate invoices for paid plans
+        if plan != "free":
+            num_invoices = random.randint(1, 6)
+            for j in range(num_invoices):
+                inv_status = random.choices(["paid", "pending", "failed"], weights=[0.8, 0.1, 0.1])[0]
+                amount = float(PLAN_MRR[plan])
+                tax = round(amount * 0.1, 2)
+                subtotal = amount
+                invoice_number = f"INV-{org['id']}-{fake.unique.random_int(min=1000, max=9999)}"
+                due_date = fake.date_between(start_date=started_at, end_date="today")
+                paid_at = datetime.combine(due_date, datetime.min.time()) + timedelta(days=2) if inv_status == "paid" else None
+                
+                cur.execute(
+                    """
+                    INSERT INTO invoices (organization_id, invoice_number, subtotal, tax, currency, status, payment_method, billing_period, due_date, paid_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (org["id"], invoice_number, subtotal, tax, "USD", inv_status, "card", "monthly", due_date, paid_at),
                 )
-
-            cur.execute(
-                """
-                INSERT INTO invoices (customer_id, amount, status, due_date, paid_at)
-                VALUES (%s, %s, %s, %s, %s)
-                """,
-                (c["id"], amount, status, due_date, paid_at),
-            )
-            count += 1
-    print(f"    [OK] {count} invoices created")
+                invoices_count += 1
+                
+    print(f"    [OK] {len(orgs)} subscriptions created")
+    print(f"    [OK] {invoices_count} invoices created")
+    return org_plans
 
 
 def seed_agents(cur):
-    """Generate 5 support agents."""
     print("  Seeding agents...")
     agent_ids = []
-    agent_names = [
-        "Sarah Chen", "Marcus Johnson", "Priya Patel",
-        "Alex Rodriguez", "Jordan Kim"
-    ]
+    agent_names = ["Sarah Chen", "Marcus Johnson", "Priya Patel", "Alex Rodriguez", "Jordan Kim"]
     for name in agent_names:
         email = f"{name.lower().replace(' ', '.')}@support.supabase.io"
         cur.execute(
-            """
-            INSERT INTO agents (name, email)
-            VALUES (%s, %s)
-            RETURNING id
-            """,
+            "INSERT INTO agents (name, email) VALUES (%s, %s) RETURNING id",
             (name, email),
         )
         agent_ids.append(cur.fetchone()[0])
@@ -259,96 +258,93 @@ def seed_agents(cur):
     return agent_ids
 
 
-def seed_tickets(cur, customers, agent_ids):
-    """Generate 80 tickets with realistic distribution."""
-    print("  Seeding tickets...")
-    ticket_ids = []
-    subjects_pool = TICKET_SUBJECTS.copy()
-
-    for i in range(NUM_TICKETS):
-        customer = random.choice(customers)
-        agent_id = random.choice(agent_ids)
-        subject = random.choice(subjects_pool)
-        category = random.choice(TICKET_CATEGORIES)
-        status = random.choice(TICKET_STATUSES)
-        priority = random.choice(TICKET_PRIORITIES)
-
-        created_at = fake.date_time_between(start_date="-6M", end_date="now")
-        resolved_at = None
-        if status in ("resolved", "closed"):
-            resolved_at = created_at + timedelta(
-                hours=random.randint(1, 72)
-            )
-
-        cur.execute(
-            """
-            INSERT INTO tickets (customer_id, agent_id, subject, category, status, priority, created_at, resolved_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (customer["id"], agent_id, subject, category, status, priority, created_at, resolved_at),
-        )
-        ticket_ids.append(cur.fetchone()[0])
-    print(f"    [OK] {NUM_TICKETS} tickets created")
-    return ticket_ids
+def generate_story_ticket(project):
+    """Generates a realistic ticket based on project state."""
+    # Logic matching realistic states
+    if project["storage"] > 90.0:
+        return ("Storage upload denied (Quota Exceeded)", "bug", "Storage", "urgent", 
+                "We are getting 403 errors when uploading to our buckets. Is there a hard limit?")
+    elif project["db_size"] > 40.0:
+        return ("Database read replica lag", "technical", "Database", "high",
+                "Our read replicas are lagging by several minutes. This is affecting user dashboards.")
+    elif project["api_reqs"] > 5000000:
+        return ("Connection pooling timeout", "technical", "Database", "high",
+                "PgBouncer is rejecting connections under high load. How can we increase the pool size?")
+    elif project["status"] == "suspended":
+        return ("Project suspended unexpectedly", "billing", "Billing", "urgent",
+                "Our project was suspended but we just paid our invoice. Please reactivate immediately.")
+    elif project["pg_version"] == "14":
+        return ("Database migration failed", "bug", "Database", "medium",
+                "Tried to upgrade to PG 15 but the migration script hung.")
+    else:
+        # Random generic SaaS issues
+        generics = [
+            ("Row Level Security policy not working", "technical", "Database", "medium", "I added an RLS policy for the users table but everyone can still read everything."),
+            ("Auth redirect loop", "bug", "Auth", "high", "After successful OAuth login with Google, users are stuck in a redirect loop on the client side."),
+            ("Realtime websocket disconnected", "bug", "Realtime", "high", "Our chat app keeps dropping the websocket connection after 5 minutes of inactivity."),
+            ("Edge Function deployment failed", "bug", "Edge Functions", "medium", "Getting an Esbuild error when deploying my edge function via CLI."),
+            ("Dashboard slow loading", "technical", "Dashboard", "low", "The table editor in the dashboard takes 10+ seconds to load our larger tables."),
+            ("OAuth callback error", "bug", "Auth", "medium", "Getting 'invalid grant' error on the callback URL for GitHub auth."),
+            ("pgvector extension missing", "technical", "Database", "medium", "Can't seem to enable pgvector, it says extension not found.")
+        ]
+        return random.choice(generics)
 
 
-def seed_ticket_messages(cur, ticket_ids):
-    """Generate ~200 ticket messages (2-4 per ticket)."""
-    print("  Seeding ticket messages...")
-    count = 0
-    for ticket_id in ticket_ids:
-        num_messages = random.randint(2, 4)
-        base_time = fake.date_time_between(start_date="-6M", end_date="-1d")
+def seed_tickets_and_messages(cur, projects, agent_ids):
+    print("  Seeding tickets & messages...")
+    tickets_created = 0
+    msgs_created = 0
 
-        for j in range(num_messages):
-            sender_type = "customer" if j % 2 == 0 else "agent"
-            if sender_type == "customer":
-                message = random.choice(CUSTOMER_MESSAGES).format(
-                    subject=random.choice(TICKET_SUBJECTS)
-                )
-            else:
-                message = random.choice(AGENT_MESSAGES)
-
-            created_at = base_time + timedelta(hours=j * random.randint(1, 12))
+    for project in projects:
+        # Generate 1-2 tickets per project
+        for _ in range(random.randint(1, 2)):
+            subject, category, affected_product, severity, initial_msg = generate_story_ticket(project)
+            agent_id = random.choice(agent_ids)
+            status = random.choice(["open", "in_progress", "resolved", "closed"])
+            
+            created_at = fake.date_time_between(start_date=project["created_at"], end_date="now")
+            resolved_at = created_at + timedelta(hours=random.randint(2, 48)) if status in ("resolved", "closed") else None
 
             cur.execute(
                 """
-                INSERT INTO ticket_messages (ticket_id, sender_type, message, created_at)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO tickets (customer_id, project_id, agent_id, subject, category, affected_product, status, severity, created_at, resolved_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
                 """,
-                (ticket_id, sender_type, message, created_at),
+                (project["owner_id"], project["id"], agent_id, subject, category, affected_product, status, severity, created_at, resolved_at),
             )
-            count += 1
+            ticket_id = cur.fetchone()[0]
+            tickets_created += 1
 
-    print(f"    [OK] {count} ticket messages created")
+            # Insert initial message
+            cur.execute(
+                "INSERT INTO ticket_messages (ticket_id, sender_type, message, created_at) VALUES (%s, %s, %s, %s)",
+                (ticket_id, "customer", initial_msg, created_at)
+            )
+            msgs_created += 1
 
+            # Agent reply
+            if status != "open":
+                agent_reply = "I'm looking into this right now. Can you provide your project ref just in case?"
+                reply_time = created_at + timedelta(minutes=random.randint(10, 120))
+                cur.execute(
+                    "INSERT INTO ticket_messages (ticket_id, sender_type, message, created_at) VALUES (%s, %s, %s, %s)",
+                    (ticket_id, "agent", agent_reply, reply_time)
+                )
+                msgs_created += 1
+                
+                # Internal note
+                if random.random() > 0.7:
+                    note = "User has high usage, escalating to tier 2."
+                    cur.execute(
+                        "INSERT INTO ticket_messages (ticket_id, sender_type, message, internal_note, created_at) VALUES (%s, %s, %s, %s, %s)",
+                        (ticket_id, "agent", note, True, reply_time + timedelta(minutes=5))
+                    )
+                    msgs_created += 1
 
-def verify_counts(cur):
-    """Verify row counts match expectations."""
-    print("\n  Verifying row counts...")
-    tables = [
-        ("customers", NUM_CUSTOMERS),
-        ("subscriptions", NUM_CUSTOMERS),
-        ("agents", NUM_AGENTS),
-        ("tickets", NUM_TICKETS),
-    ]
-    all_ok = True
-    for table, expected in tables:
-        cur.execute(f"SELECT count(*) FROM {table}")
-        actual = cur.fetchone()[0]
-        status = "[OK]" if actual == expected else "[FAIL]"
-        if actual != expected:
-            all_ok = False
-        print(f"    {status} {table}: {actual} rows (expected {expected})")
-
-    # Invoices and messages have variable counts
-    for table in ["invoices", "ticket_messages"]:
-        cur.execute(f"SELECT count(*) FROM {table}")
-        actual = cur.fetchone()[0]
-        print(f"    [OK] {table}: {actual} rows")
-
-    return all_ok
+    print(f"    [OK] {tickets_created} tickets created")
+    print(f"    [OK] {msgs_created} ticket messages created")
+    return tickets_created, msgs_created
 
 
 def main():
@@ -362,43 +358,32 @@ def main():
     cur = conn.cursor()
 
     try:
-        # Clear existing data (in reverse FK order)
+        # Clear existing data
         print("\n[1/7] Clearing existing data...")
-        for table in [
-            "ticket_messages", "tickets", "invoices",
-            "subscriptions", "agents", "customers"
-        ]:
+        tables = [
+            "ticket_messages", "tickets", "invoices", "subscriptions",
+            "usage_metrics", "projects", "organizations", "agents", "customers"
+        ]
+        for table in tables:
             cur.execute(f"TRUNCATE {table} CASCADE")
         print("    [OK] All tables cleared")
 
-        # Seed data
-        print("\n[2/7] Seeding customers...")
+        print("\n[2/7] Seeding core hierarchy...")
         customers = seed_customers(cur)
+        orgs = seed_organizations(cur, customers)
+        projects = seed_projects_and_usage(cur, orgs)
 
-        print("\n[3/7] Seeding subscriptions...")
-        seed_subscriptions(cur, customers)
+        print("\n[3/7] Seeding billing & invoices...")
+        seed_subscriptions_and_invoices(cur, orgs, projects)
 
-        print("\n[4/7] Seeding invoices...")
-        seed_invoices(cur, customers)
-
-        print("\n[5/7] Seeding agents...")
+        print("\n[4/7] Seeding agents...")
         agent_ids = seed_agents(cur)
 
-        print("\n[6/7] Seeding tickets...")
-        ticket_ids = seed_tickets(cur, customers, agent_ids)
+        print("\n[5/7] Seeding support tickets...")
+        seed_tickets_and_messages(cur, projects, agent_ids)
 
-        print("\n[7/7] Seeding ticket messages...")
-        seed_ticket_messages(cur, ticket_ids)
-
-        # Verify
-        ok = verify_counts(cur)
-
-        if ok:
-            conn.commit()
-            print("\n[OK] Seed complete! All data committed.")
-        else:
-            conn.rollback()
-            print("\n[FAIL] Verification failed. Transaction rolled back.")
+        conn.commit()
+        print("\n[OK] Seed complete! All realistic data committed.")
 
     except Exception as e:
         conn.rollback()

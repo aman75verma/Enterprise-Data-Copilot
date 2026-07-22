@@ -28,30 +28,68 @@ This is now fixed. Do not re-decide this while building — if you get the urge 
 ### 1.1 Schema — run this exact SQL to create your tables
 
 ```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 CREATE TABLE customers (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     company TEXT,
-    signup_date DATE NOT NULL,
-    plan TEXT NOT NULL CHECK (plan IN ('free', 'pro', 'team', 'enterprise'))
+    country TEXT,
+    timezone TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE organizations (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    billing_email TEXT NOT NULL,
+    owner_customer_id INTEGER NOT NULL REFERENCES customers(id),
+    created_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE projects (
+    id SERIAL PRIMARY KEY,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id),
+    project_ref TEXT UNIQUE NOT NULL,
+    project_name TEXT NOT NULL,
+    region TEXT NOT NULL,
+    postgres_version TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('active', 'paused', 'suspended', 'restoring', 'coming_up')),
+    created_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE usage_metrics (
+    project_id INTEGER PRIMARY KEY REFERENCES projects(id),
+    database_size_gb NUMERIC(10,2) NOT NULL DEFAULT 0,
+    storage_gb NUMERIC(10,2) NOT NULL DEFAULT 0,
+    bandwidth_gb NUMERIC(10,2) NOT NULL DEFAULT 0,
+    api_requests BIGINT NOT NULL DEFAULT 0,
+    active_users INTEGER NOT NULL DEFAULT 0,
+    last_updated TIMESTAMP NOT NULL DEFAULT now()
 );
 
 CREATE TABLE subscriptions (
     id SERIAL PRIMARY KEY,
-    customer_id INTEGER REFERENCES customers(id),
-    plan_name TEXT NOT NULL,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id),
+    plan TEXT NOT NULL CHECK (plan IN ('free', 'pro', 'team', 'enterprise')),
     status TEXT NOT NULL CHECK (status IN ('active', 'past_due', 'cancelled', 'trialing')),
-    mrr NUMERIC(10,2) NOT NULL,
+    monthly_cost NUMERIC(10,2) NOT NULL,
     renewal_date DATE,
     started_at DATE NOT NULL
 );
 
 CREATE TABLE invoices (
     id SERIAL PRIMARY KEY,
-    customer_id INTEGER REFERENCES customers(id),
-    amount NUMERIC(10,2) NOT NULL,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id),
+    invoice_number TEXT UNIQUE NOT NULL,
+    subtotal NUMERIC(10,2) NOT NULL,
+    tax NUMERIC(10,2) NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'USD',
     status TEXT NOT NULL CHECK (status IN ('paid', 'pending', 'failed', 'refunded')),
+    payment_method TEXT,
+    billing_period TEXT NOT NULL,
     due_date DATE NOT NULL,
     paid_at TIMESTAMP
 );
@@ -64,43 +102,46 @@ CREATE TABLE agents (
 
 CREATE TABLE tickets (
     id SERIAL PRIMARY KEY,
-    customer_id INTEGER REFERENCES customers(id),
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    project_id INTEGER REFERENCES projects(id),
     agent_id INTEGER REFERENCES agents(id),
     subject TEXT NOT NULL,
     category TEXT NOT NULL CHECK (category IN ('billing', 'technical', 'account', 'feature_request', 'bug')),
+    affected_product TEXT CHECK (affected_product IN ('Auth', 'Database', 'Storage', 'Edge Functions', 'Realtime', 'Dashboard', 'Billing', 'CLI', 'Other')),
     status TEXT NOT NULL CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
-    priority TEXT NOT NULL CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
+    severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'urgent')),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     resolved_at TIMESTAMP
 );
 
 CREATE TABLE ticket_messages (
     id SERIAL PRIMARY KEY,
-    ticket_id INTEGER REFERENCES tickets(id),
+    ticket_id INTEGER NOT NULL REFERENCES tickets(id),
     sender_type TEXT NOT NULL CHECK (sender_type IN ('customer', 'agent')),
     message TEXT NOT NULL,
+    internal_note BOOLEAN NOT NULL DEFAULT false,
+    attachments JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 ```
 
 ### 1.2 Seed data — generation plan
 
-Write a Python script `seed.py` using the `faker` library:
-- 50 rows in `customers` (mix of all 4 plans)
-- 50 rows in `subscriptions` (one per customer, ~10% `past_due` or `cancelled` for realistic edge cases)
-- 150 rows in `invoices` (2-4 per customer, ~15% `failed` or `pending`)
-- 5 rows in `agents`
-- 80 rows in `tickets` (spread across categories/statuses, realistic subjects like "Can't connect to database", "Billing charged twice", "How do I add RLS policy")
-- 200 rows in `ticket_messages` (2-4 messages per ticket)
+Write a Python script `seed.py` using the `faker` library that builds a coherent story:
+- Generate Customers, Organizations, and Projects hierarchically.
+- Generate realistic Usage Metrics (active vs paused).
+- Base Subscriptions and Invoices on usage.
+- Generate Support Tickets logically tied to the state (e.g. quota warnings for high storage, suspension tickets for past_due invoices).
+- Use Supabase-specific subjects like "Row Level Security policy not working".
 
-**Definition of done:** running `python seed.py` populates all 6 tables, and `SELECT count(*) FROM tickets;` returns 80.
+**Definition of done:** running `python seed.py` populates all tables hierarchically, and tickets match the project states.
 
 ### 1.3 Sample questions this table should answer (your eval set for the SQL tool)
-1. "What's the status of [customer]'s subscription?"
-2. "How many open tickets does [customer] have?"
-3. "List all customers on the enterprise plan with a past_due subscription."
-4. "What was [customer]'s last invoice amount and was it paid?"
-5. "Which agent has resolved the most tickets this month?"
+1. "What's the status of the subscription for organization [org_name]?"
+2. "How many open tickets does project [project_ref] have?"
+3. "List all projects on Postgres 14 that have active users."
+4. "What was [org_name]'s last invoice amount and was it paid?"
+5. "Which agent has resolved the most 'Storage' tickets this month?"
 
 ---
 
@@ -133,7 +174,13 @@ CREATE TABLE doc_chunks (
     id SERIAL PRIMARY KEY,
     source_file TEXT NOT NULL,
     content TEXT NOT NULL,
-    embedding VECTOR(384)  -- 384 = all-MiniLM-L6-v2 output dimension
+    embedding VECTOR(384),  -- 384 = all-MiniLM-L6-v2 output dimension
+    title TEXT,
+    product TEXT,
+    section TEXT,
+    url TEXT,
+    chunk_index INTEGER NOT NULL DEFAULT 0,
+    last_updated TIMESTAMP NOT NULL DEFAULT now()
 );
 ```
 6. At query time: embed the user's question with the same model, run:
@@ -199,7 +246,7 @@ Implement exactly these three MCP tools. Use this as your spec — implement the
 ```json
 {
   "name": "query_customer_db",
-  "description": "Run a read-only SQL query against the customer support database (customers, subscriptions, invoices, tickets, ticket_messages, agents tables). Use for questions about a specific customer's account, billing, subscription status, or ticket history.",
+  "description": "Run a read-only SQL query against the customer support database (customers, organizations, projects, usage_metrics, subscriptions, invoices, tickets, ticket_messages, agents tables). Use for questions about a specific customer, project, organization, billing, or ticket history.",
   "input_schema": {
     "type": "object",
     "properties": {
