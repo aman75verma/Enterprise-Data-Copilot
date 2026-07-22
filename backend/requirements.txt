@@ -20,8 +20,9 @@ httpx==0.28.1
 groq==0.25.0
 
 # Embeddings (added in Chunk 2)
-# sentence-transformers==4.1.0
-# torch (CPU)
+sentence-transformers==4.1.0
+langchain-text-splitters==0.3.8
+PyYAML==6.0.2
 
 # MCP SDK (added in Chunk 4)
 # mcp[cli]

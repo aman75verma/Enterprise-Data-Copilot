@@ -32,3 +32,4 @@ build/
 
 # Docs (cloned for RAG ingestion — large)
 docs_raw/
+backend/supabase/
