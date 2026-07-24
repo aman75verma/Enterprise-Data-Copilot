@@ -37,8 +37,8 @@
 | # | Source | Implementation | Status |
 |---|---|---|---|
 | 1 | SQL Database | Postgres — customers, subscriptions, invoices, agents, tickets, ticket_messages | ✅ Done |
-| 2 | Document RAG | pgvector — Supabase docs chunked + embedded | ⬜ Not started |
-| 3 | External API | GitHub Issues REST API (`supabase/supabase`) | ⬜ Not started |
+| 2 | Document RAG | pgvector - Supabase docs chunked + embedded in `doc_chunks` | Done |
+| 3 | External API | GitHub Issues REST API (`supabase/supabase`) via live issue tracker client | Done |
 
 ---
 
@@ -46,9 +46,9 @@
 
 | Tool Name | Purpose | Status |
 |---|---|---|
-| `query_customer_db` | Read-only SQL against support DB | ⬜ Not started |
-| `search_docs` | Semantic search over product docs | ⬜ Not started |
-| `check_issue_tracker` | GitHub Issues lookup by keyword/number | ⬜ Not started |
+| `query_customer_db` | Read-only SQL against support DB; rejects non-SELECT/write/admin queries | Done |
+| `search_docs` | Semantic search over product docs in `doc_chunks` | Done |
+| `check_issue_tracker` | Live issue tracker lookup by keyword/number | Done |
 
 ---
 
@@ -58,10 +58,10 @@
 |---|---|---|---|---|
 | 0 | Domain Decision | ✅ Done (locked in spec) | Pre-project | Internal Support Copilot, Supabase reference |
 | 1 | SQL Database + Seed Data | ✅ Done | 2026-07-21 | Postgres on port 5433 (avoided local conflict) |
-| 2 | Document RAG Ingestion | ⬜ Not started | — | — |
-| 3 | External API Tool | ⬜ Not started | — | — |
-| 4 | MCP Tool Definitions | ⬜ Not started | — | — |
-| 5 | Routing / Orchestrator | ⬜ Not started | — | — |
+| 2 | Document RAG Ingestion | Done | 2026-07-22 | Ingested 6,833 chunks from Supabase docs into `doc_chunks` |
+| 3 | External API Tool | Done | 2026-07-22 | Added live issue tracker client for search, issue lookup, labels, and label counts |
+| 4 | MCP Tool Definitions | Done | 2026-07-23 | Added real MCP server exposing `query_customer_db`, `search_docs`, and `check_issue_tracker` |
+| 5 | Routing / Orchestrator | Done | 2026-07-23 | Groq Llama 3.3 70B, multi-tool loop, system prompt |
 | 6 | Backend Endpoints | ⬜ Not started | — | — |
 | 7 | Frontend | ⬜ Not started | — | — |
 | 8 | Infrastructure (Docker/CI) | ⬜ Not started | — | — |
@@ -97,7 +97,8 @@
 |---|---|---|---|
 | 2026-07-21 | Project kickoff — plan created | Following chunk-by-chunk blueprint | AI + User |
 | — | LLM provider | *Pending user input* | — |
-| — | Embedding model | Spec suggests `all-MiniLM-L6-v2` — *pending user confirmation* | — |
+| 2026-07-22 | Embedding model | Using `sentence-transformers/all-MiniLM-L6-v2` per Chunk 2 spec | AI + User |
+| 2026-07-23 | MCP implementation | Built a real Python MCP server with `mcp.server.fastmcp.FastMCP`, plus a CLI demo runner for local testing | AI + User |
 | — | Frontend bundler | Recommending Vite — *pending user confirmation* | — |
 
 ---
@@ -122,6 +123,16 @@
 - **Refactored Entities**: Moved `subscriptions` and `invoices` to organizations. Added `project_id` and `affected_product` to tickets.
 - **Seed Script**: Rewrote `seed.py` completely to generate story-driven, coherent data (e.g., quota warnings for high storage).
 - **Documentation**: Updated `Enterprise Data Copilot.md` and `Project Chunks.md` to match new specifications. Created `docs/data_architecture.md`.
+
+### 2026-07-23 — Chunk 5: Routing / Orchestrator
+- **Created**: `backend/agent/system_prompt.py` with the Chunk 5 system prompt (extended with schema context).
+- **Created**: `backend/agent/orchestrator.py` with a full agentic tool-calling loop using Groq SDK.
+- Supports multi-tool sequential calls (up to 5 rounds), conversation history, and structured tool result injection.
+- Installed `groq` SDK.
+
+### 2026-07-23 — Chunk 0-4 Handoff Guide
+- **Created**: `docs/chunk0-4_handoff.md` as a compact walkthrough of Chunks 0 through 4.
+- **Purpose**: Summarizes what is synthetic vs live, maps the key backend/tool files, and lists the study topics needed before Chunk 5.
 
 ---
 
