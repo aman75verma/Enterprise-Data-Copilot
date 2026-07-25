@@ -63,7 +63,7 @@
 | 4 | MCP Tool Definitions | Done | 2026-07-23 | Added real MCP server exposing `query_customer_db`, `search_docs`, and `check_issue_tracker` |
 | 5 | Routing / Orchestrator | Done | 2026-07-23 | Groq Llama 3.3 70B, multi-tool loop, system prompt |
 | 5.1 | Standardization Pass | Done | 2026-07-25 | Tool registry, structured logging, DB pool, error types, comparison runner |
-| 6 | Backend Endpoints | ⬜ Not started | — | — |
+| 6 | Backend Endpoints | Done | 2026-07-25 | FastAPI: /chat, /conversations/{id}, /admin/logs, /health |
 | 7 | Frontend | ⬜ Not started | — | — |
 | 8 | Infrastructure (Docker/CI) | ⬜ Not started | — | — |
 | 9 | Eval Set | ⬜ Not started | — | — |
@@ -124,6 +124,16 @@
 - **Refactored Entities**: Moved `subscriptions` and `invoices` to organizations. Added `project_id` and `affected_product` to tickets.
 - **Seed Script**: Rewrote `seed.py` completely to generate story-driven, coherent data (e.g., quota warnings for high storage).
 - **Documentation**: Updated `Enterprise Data Copilot.md` and `Project Chunks.md` to match new specifications. Created `docs/data_architecture.md`.
+
+### 2026-07-25 — Chunk 6: Backend Endpoints
+- **Created**: `backend/main.py` — FastAPI app with 4 endpoints.
+- **Created**: `backend/models.py` — Pydantic request/response models.
+- **Created**: `backend/db/conversation_store.py` — CRUD for conversations and turns.
+- **Created**: `backend/test_cli.py` — CLI tester for all endpoints.
+- **Verified**: Server starts, `/health` returns `{"status": "ok", "database": "ok", "embedding_model": "ok"}`.
+- **Verified**: `/admin/logs` returns empty array (no conversations yet).
+- **Verified**: `/chat` correctly hits Groq API (returns 401 because `GROQ_API_KEY` is a placeholder — set a real key to unlock full end-to-end).
+- **Installed**: `fastapi`, `uvicorn[standard]` into venv.
 
 ### 2026-07-25 — Standardization Pass (Dual-Path Quality)
 - **Fixed**: Typo in `issue_tracker_tool.py` (`LiveIlssueTrackerClient` -> `LiveIssueTrackerClient`).
