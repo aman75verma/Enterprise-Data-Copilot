@@ -62,6 +62,7 @@
 | 3 | External API Tool | Done | 2026-07-22 | Added live issue tracker client for search, issue lookup, labels, and label counts |
 | 4 | MCP Tool Definitions | Done | 2026-07-23 | Added real MCP server exposing `query_customer_db`, `search_docs`, and `check_issue_tracker` |
 | 5 | Routing / Orchestrator | Done | 2026-07-23 | Groq Llama 3.3 70B, multi-tool loop, system prompt |
+| 5.1 | Standardization Pass | Done | 2026-07-25 | Tool registry, structured logging, DB pool, error types, comparison runner |
 | 6 | Backend Endpoints | ⬜ Not started | — | — |
 | 7 | Frontend | ⬜ Not started | — | — |
 | 8 | Infrastructure (Docker/CI) | ⬜ Not started | — | — |
@@ -123,6 +124,16 @@
 - **Refactored Entities**: Moved `subscriptions` and `invoices` to organizations. Added `project_id` and `affected_product` to tickets.
 - **Seed Script**: Rewrote `seed.py` completely to generate story-driven, coherent data (e.g., quota warnings for high storage).
 - **Documentation**: Updated `Enterprise Data Copilot.md` and `Project Chunks.md` to match new specifications. Created `docs/data_architecture.md`.
+
+### 2026-07-25 — Standardization Pass (Dual-Path Quality)
+- **Fixed**: Typo in `issue_tracker_tool.py` (`LiveIlssueTrackerClient` -> `LiveIssueTrackerClient`).
+- **Created**: `backend/tools/tool_registry.py` — single source of truth for all tool schemas.
+- **Created**: `backend/tools/errors.py` — standardized `ToolError` base class.
+- **Created**: `backend/agent/logger.py` — structured logging with latency tracking.
+- **Created**: `backend/db/pool.py` — threaded DB connection pool.
+- **Created**: `backend/agent/compare.py` — dual-path comparison runner.
+- **Refactored**: `orchestrator.py` now imports tool schemas from registry + uses logger.
+- **Refactored**: `mcp_server.py` now imports descriptions from registry + uses logger.
 
 ### 2026-07-23 — Chunk 5: Routing / Orchestrator
 - **Created**: `backend/agent/system_prompt.py` with the Chunk 5 system prompt (extended with schema context).

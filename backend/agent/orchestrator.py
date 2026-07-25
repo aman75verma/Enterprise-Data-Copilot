@@ -6,16 +6,20 @@ Handles:
 - Sequential tool calls in a loop
 - Conversation history
 - Structured tool result injection
+- Structured logging with latency tracking
 """
 
 import json
 import os
 from typing import Any
 
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 from groq import Groq
 
 from backend.agent.system_prompt import SYSTEM_PROMPT
+from backend.agent.logger import log_tool_call
+from backend.tools.tool_registry import get_openai_tools
 from backend.tools.sql_tool import query_customer_db, UnsafeQueryError
 from backend.tools.docs_tool import search_docs
 from backend.tools.issue_tracker_tool import check_issue_tracker
@@ -28,82 +32,15 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 MAX_TOOL_ROUNDS = 5  # Safety cap on tool-call loops
 
-# ------------------------------------------------------------------
-# Tool definitions (OpenAI-compatible function-calling format)
-# ------------------------------------------------------------------
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "query_customer_db",
-            "description": (
-                "Run a read-only SQL query against the customer support database "
-                "(customers, organizations, projects, usage_metrics, subscriptions, "
-                "invoices, tickets, ticket_messages, agents). Use for questions about "
-                "a specific customer, project, organization, billing, or ticket history."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "sql_query": {
-                        "type": "string",
-                        "description": "A read-only SELECT query",
-                    }
-                },
-                "required": ["sql_query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_docs",
-            "description": (
-                "Search product documentation for how-to guides, feature explanations, "
-                "and setup instructions. Use for general product knowledge questions "
-                "not tied to a specific customer's account."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The search query",
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": "Number of chunks to return (default 5)",
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "check_issue_tracker",
-            "description": (
-                "Check the live issue tracker for open bugs or feature requests "
-                "matching a keyword, or look up a specific issue by number. Use when "
-                "a customer reports a bug and you need to check if it's a known issue."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "keyword": {
-                        "type": "string",
-                        "description": "Search keyword (omit if using issue_number)",
-                    },
-                    "issue_number": {
-                        "type": "integer",
-                        "description": "Specific issue number to look up",
-                    },
-                },
-            },
-        },
-    },
-]
+# Tool schema — imported from the single registry
+TOOLS = get_openai_tools()
+
+# Map tool names to their Python implementations
+_TOOL_DISPATCH = {
+    "query_customer_db": query_customer_db,
+    "search_docs": search_docs,
+    "check_issue_tracker": check_issue_tracker,
+}
 
 
 # ------------------------------------------------------------------
@@ -111,19 +48,18 @@ TOOLS = [
 # ------------------------------------------------------------------
 def _execute_tool(name: str, arguments: dict[str, Any]) -> str:
     """Execute a tool by name and return the result as a JSON string."""
-    try:
-        if name == "query_customer_db":
-            result = query_customer_db(**arguments)
-        elif name == "search_docs":
-            result = search_docs(**arguments)
-        elif name == "check_issue_tracker":
-            result = check_issue_tracker(**arguments)
-        else:
-            result = {"error": f"Unknown tool: {name}"}
-    except UnsafeQueryError as e:
-        result = {"error": f"Query rejected: {e}"}
-    except Exception as e:
-        result = {"error": str(e)}
+    with log_tool_call(name, arguments, path="direct") as ctx:
+        try:
+            fn = _TOOL_DISPATCH.get(name)
+            if fn is None:
+                result = {"error": f"Unknown tool: {name}"}
+            else:
+                result = fn(**arguments)
+        except UnsafeQueryError as e:
+            result = {"error": f"Query rejected: {e}"}
+        except Exception as e:
+            result = {"error": str(e)}
+        ctx["result"] = result
 
     return json.dumps(result, default=str)
 
@@ -208,3 +144,4 @@ def run_agent(
         "tool_calls": tool_calls_log,
         "history": [m for m in messages if m.get("role") != "system"],
     }
+
