@@ -2,7 +2,9 @@ import os
 import sys
 
 import psycopg2
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
+# pyrefly: ignore [missing-import]
 from sentence_transformers import SentenceTransformer
 
 from ingest_docs import vector_literal
