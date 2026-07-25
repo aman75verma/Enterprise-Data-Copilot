@@ -101,7 +101,22 @@ def run_agent(
         # If the model wants to call tools
         if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
             # Append the assistant message (with tool_calls) to history
-            messages.append(choice.message.model_dump())
+            assistant_msg = {
+                "role": "assistant",
+                "content": choice.message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in choice.message.tool_calls
+                ],
+            }
+            messages.append(assistant_msg)
 
             for tc in choice.message.tool_calls:
                 fn_name = tc.function.name
