@@ -118,6 +118,15 @@
   4. OK with `all-MiniLM-L6-v2` for embeddings?
   5. Vite as React bundler?
 
+### 2026-07-26 — Chunk 7: Frontend Structure
+- **Created**: `frontend/src/index.css` — Vanilla CSS Glassmorphism design system.
+- **Created**: `frontend/src/api/client.ts` — TypeScript fetch wrapper for FastAPI endpoints.
+- **Created**: `frontend/src/components/TopNav.tsx`, `ChatWindow.tsx`, `MessageBubble.tsx`, `ToolCallTrace.tsx`.
+- **Created**: `frontend/src/pages/Chat.tsx` — Main chat flow with optimistic UI updates and Dev Mode toggle.
+- **Created**: `frontend/src/pages/AdminDashboard.tsx` — Global logs viewer and Dual-Path latency comparison UI.
+- **Updated**: `backend/main.py` and `backend/models.py` — Added `POST /admin/compare` route to support frontend dual-path testing.
+- **Verified**: Vite dev server running, UI successfully communicates with backend.
+
 ### 2026-07-22 — Database Layer Redesign (SaaS/BaaS Model)
 - **Architectural Change**: Remodeled the database schema to reflect a Supabase-like BaaS platform.
 - **Added Entities**: `organizations`, `projects`, `usage_metrics`.
