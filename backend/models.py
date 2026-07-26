@@ -11,12 +11,26 @@ class ChatRequest(BaseModel):
     conversation_id: str | None = Field(None, description="Existing conversation UUID (omit to start new)")
 
 
+class CompareRequest(BaseModel):
+    tool_name: str
+    arguments: dict[str, Any]
+
+
+
 # --- Response models ---
+
+class CompareResponse(BaseModel):
+    tool_name: str
+    direct_ms: float
+    mcp_ms: float | None = None
+    mcp_error: str | None = None
+    result_preview: str
 
 class ToolCallEntry(BaseModel):
     tool: str
     arguments: dict[str, Any]
     result: dict[str, Any] | list[Any]
+
 
 
 class ChatResponse(BaseModel):

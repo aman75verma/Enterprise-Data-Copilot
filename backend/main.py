@@ -23,6 +23,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.models import (
     ChatRequest,
     ChatResponse,
+    CompareRequest,
+    CompareResponse,
     ConversationResponse,
     HealthResponse,
     LogEntry,
@@ -146,6 +148,43 @@ async def admin_logs(limit: int = 50):
         LogEntry(**{k: str(v) if k in ("created_at", "conversation_id") else v for k, v in row.items()})
         for row in rows
     ]
+
+
+# ------------------------------------------------------------------
+# POST /admin/compare
+# ------------------------------------------------------------------
+@app.post("/admin/compare", response_model=CompareResponse)
+async def admin_compare(req: CompareRequest):
+    """Run a tool via Direct path and return latencies (MCP path simulated)."""
+    from backend.agent.compare import _run_direct
+    import json
+
+    try:
+        result_a, ms_a = _run_direct(req.tool_name, req.arguments)
+        
+        # Determine result preview string
+        preview = ""
+        if isinstance(result_a, list):
+            preview = f"{len(result_a)} rows/items returned."
+        elif isinstance(result_a, dict):
+            if "rows" in result_a:
+                preview = f"{len(result_a['rows'])} rows returned."
+            elif "results" in result_a:
+                preview = f"{len(result_a['results'])} items returned."
+            else:
+                preview = json.dumps(result_a)[:100]
+        else:
+            preview = str(result_a)[:100]
+            
+        return CompareResponse(
+            tool_name=req.tool_name,
+            direct_ms=round(ms_a, 2),
+            mcp_ms=None,
+            mcp_error="MCP server client not connected (simulated)",
+            result_preview=preview
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ------------------------------------------------------------------
