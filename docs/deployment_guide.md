@@ -58,3 +58,96 @@ To shut everything down:
 ```bash
 docker-compose down
 ```
+
+## 5. Understanding the Build Output
+
+When you run `docker-compose up --build -d` successfully, you will see output similar to this at the end:
+
+```
+ ✔ Image enterprisedatacopilot-backend       Built               1546.6s
+ ✔ Image enterprisedatacopilot-frontend      Built               1546.6s
+ ✔ Network enterprisedatacopilot_copilot_net Created             0.1s   
+ ✔ Container copilot-postgres                Healthy             28.1s
+ ✔ Container copilot-backend                 Started             13.3s
+ ✔ Container copilot-frontend                Started             15.0s  
+```
+
+### What happened here?
+
+1. **Images Built**: Docker successfully followed the recipes in your `backend/Dockerfile` and `frontend/Dockerfile` to create the final "Images" (the packaged code). The time (e.g., `1546.6s`) indicates how long it took to download the base operating systems, install dependencies (like React packages and Python libraries), and build the code. This is usually only slow the very first time!
+2. **Network Created**: Docker created a secure, private virtual network (`enterprisedatacopilot_copilot_net`) so that the containers can communicate with each other securely without being exposed to the outside internet.
+3. **Containers Started**:
+   - `copilot-postgres` reached a `Healthy` state. This means the database started up and passed its internal connection checks.
+   - `copilot-backend` and `copilot-frontend` were successfully started and connected to the network.
+
+### What to do next?
+
+Now that it says `Started`, your production-grade application is actively running in the background!
+
+1. Open your web browser and navigate to `http://localhost`.
+2. You will see the Enterprise Data Copilot UI exactly as a user would see it in production.
+3. Because you ran the command with the `-d` flag (detached mode), you can safely close your terminal without killing the app.
+4. Try using the application. If you need to debug or see live console logs for the backend or frontend, run:
+   ```bash
+   docker-compose logs -f
+   ```
+
+## 6. Pushing to Docker Hub
+
+If you want others to be able to use your application without needing to build it from the source code, you can push your built images to **Docker Hub** (the public registry for Docker images).
+
+1. **Create an account** on [hub.docker.com](https://hub.docker.com/).
+2. **Login** in your terminal:
+   ```bash
+   docker login
+   ```
+3. **Tag your images** with your Docker Hub username. For example, if your username is `johndoe`:
+   ```bash
+   docker tag enterprisedatacopilot-backend johndoe/copilot-backend:latest
+   docker tag enterprisedatacopilot-frontend johndoe/copilot-frontend:latest
+   ```
+4. **Push the images**:
+   ```bash
+   docker push johndoe/copilot-backend:latest
+   docker push johndoe/copilot-frontend:latest
+   ```
+Anyone in the world can now run your app by putting those image names into a `docker-compose.yml` file!
+
+## 7. Deploying to Render (For Free)
+
+Render is an excellent platform for hosting applications for free. Since you've already pushed your code to GitHub, Render makes it incredibly easy to go live.
+
+> [!WARNING]  
+> Render's Free tier has two limitations:
+> 1. The free Postgres Database expires after 90 days.
+> 2. Free Web Services (like your backend) will "go to sleep" after 15 minutes of inactivity, causing the next request to take ~50 seconds to wake up.
+
+### Step 1: Deploy the Database
+1. Go to your [Render Dashboard](https://dashboard.render.com/) and click **New -> PostgreSQL**.
+2. Give it a name (e.g., `copilot-db`) and select the **Free** tier.
+3. Once created, copy the **Internal Database URL**.
+
+### Step 2: Deploy the Backend
+1. In the Render Dashboard, click **New -> Web Service**.
+2. Connect your GitHub repository.
+3. Render will ask how to build it. Select **Docker** as the environment.
+4. Set the **Dockerfile Path** to `./backend/Dockerfile`.
+5. Under **Environment Variables**, add:
+   - `DATABASE_URL`: (Paste the Internal Database URL from Step 1)
+   - `GROQ_API_KEY`: (Your actual Groq API key)
+6. Click **Create Web Service**. Once it finishes deploying, copy its public URL (e.g., `https://copilot-backend-xyz.onrender.com`).
+
+### Step 3: Deploy the Frontend (As a Static Site)
+We will deploy the frontend as a **Static Site** rather than a Docker container. This is because Render Static Sites are incredibly fast, don't sleep, and are completely free forever!
+
+1. In the Render Dashboard, click **New -> Static Site**.
+2. Connect your GitHub repository.
+3. Configure the build:
+   - **Build Command**: `cd frontend && npm install && npm run build`
+   - **Publish Directory**: `frontend/dist`
+4. Under **Environment Variables**, add:
+   - `VITE_API_URL`: (Paste the public URL of your backend from Step 2)
+5. Click **Create Static Site**.
+
+**You're Live!**
+Once the frontend finishes building, Render will give you a public URL for your website. It is now live on the internet!
