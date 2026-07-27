@@ -11,34 +11,22 @@ export function MessageBubble({ turn, isDevMode }: Props) {
   const isUser = turn.role === 'user';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-      <div className={`message-wrapper ${isUser ? 'user' : 'ai'}`}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            marginBottom: 6,
-            alignSelf: isUser ? 'flex-end' : 'flex-start',
-            color: 'var(--text-muted)',
-            fontSize: '0.75rem',
-            fontWeight: 500,
-          }}
-        >
-          {isUser ? (
-            <>You <User size={12} /></>
-          ) : (
-            <><Bot size={12} /> Copilot</>
-          )}
+    <>
+      <div className={`msg-row ${isUser ? 'user' : 'ai'}`}>
+        <div className={`msg-avatar ${isUser ? 'user-av' : 'ai-av'}`}>
+          {isUser ? <User size={14} /> : <Bot size={14} />}
         </div>
-        <div className="message-bubble">{turn.content}</div>
+        <div className="msg-body">
+          <span className="msg-label">{isUser ? 'You' : 'Copilot'}</span>
+          <div className="msg-bubble">{turn.content}</div>
+        </div>
       </div>
 
-      {isDevMode && turn.role === 'assistant' && turn.tool_calls && (
-        <div style={{ marginTop: 12, marginBottom: 16 }}>
+      {isDevMode && turn.role === 'assistant' && turn.tool_calls && turn.tool_calls.length > 0 && (
+        <div style={{ maxWidth: '85%', alignSelf: 'flex-start', marginLeft: 42 }}>
           <ToolCallTrace calls={turn.tool_calls} latency={turn.latency_ms} />
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader, Database, FileText, Bug, Plus } from 'lucide-react';
+import { Send, Database, FileText, Bug, Plus, Bot } from 'lucide-react';
 import { api, type Turn } from '../api/client';
 import { MessageBubble } from '../components/MessageBubble';
 import { TopNav } from '../components/TopNav';
 
 const SUGGESTIONS = [
-  { icon: Database, text: 'How many customers are on the enterprise plan?' },
-  { icon: Database, text: 'Show me open tickets for Auth issues' },
-  { icon: FileText, text: 'How do I enable Row Level Security?' },
-  { icon: Bug, text: 'Are there any open bugs related to Edge Functions?' },
+  { icon: Database, text: 'How many customers are on the enterprise plan?', color: 'chip-db' },
+  { icon: Database, text: 'Show open tickets related to Auth', color: 'chip-db' },
+  { icon: FileText, text: 'How do I enable Row Level Security?', color: 'chip-doc' },
+  { icon: Bug, text: 'Any open bugs related to Edge Functions?', color: 'chip-bug' },
 ];
 
 export function Chat() {
@@ -29,14 +29,10 @@ export function Chat() {
     setIsLoading(true);
 
     const optimistic: Turn = {
-      id: Date.now(),
-      role: 'user',
-      content: text.trim(),
-      tool_calls: null,
-      tool_name: null,
-      latency_ms: null,
+      id: Date.now(), role: 'user', content: text.trim(),
+      tool_calls: null, tool_name: null, latency_ms: null,
     };
-    setMessages((prev) => [...prev, optimistic]);
+    setMessages(prev => [...prev, optimistic]);
 
     try {
       const data = await api.chat(text.trim(), conversationId);
@@ -44,66 +40,44 @@ export function Chat() {
       const fullConv = await api.getConversation(data.conversation_id);
       setMessages(fullConv.turns);
     } catch (err: any) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: 'assistant',
-          content: `❌ ${err.message || 'Failed to connect to backend.'}`,
-          tool_calls: null,
-          tool_name: null,
-          latency_ms: null,
-        },
-      ]);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, role: 'assistant',
+        content: `Error: ${err.message || 'Could not reach the backend. Is uvicorn running on port 8000?'}`,
+        tool_calls: null, tool_name: null, latency_ms: null,
+      }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendMessage(input);
-  };
-
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); sendMessage(input); };
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(input);
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
   };
-
-  const handleNewChat = () => {
-    setMessages([]);
-    setConversationId(undefined);
-    setInput('');
-  };
+  const handleNewChat = () => { setMessages([]); setConversationId(undefined); setInput(''); };
 
   return (
-    <div className="app-container">
-      <TopNav isDevMode={isDevMode} setIsDevMode={setIsDevMode} />
+    <>
+      <div className="bg-glow" />
+      <div className="app-shell">
+        <TopNav isDevMode={isDevMode} setIsDevMode={setIsDevMode} />
 
-      <div className="main-content">
-        <div className="chat-area glass-panel">
-          <div className="messages-container">
+        <div className="chat-layout glass">
+          <div className="messages-scroll">
             {messages.length === 0 && (
-              <div className="welcome-screen">
-                <div className="welcome-logo">
-                  <Database size={32} color="#0b0f19" />
+              <div className="welcome">
+                <div className="welcome-icon">
+                  <Bot size={34} color="#080c14" strokeWidth={2} />
                 </div>
-                <h1>How can I help?</h1>
-                <p>
-                  Query customer data, search product docs, or check live GitHub issues — all in one place.
-                </p>
-                <div className="suggested-questions">
+                <h1>What can I help you with?</h1>
+                <p>Query customer databases, search product documentation, or check live GitHub issues — all powered by AI.</p>
+
+                <div className="welcome-grid">
                   {SUGGESTIONS.map((s, i) => (
-                    <button
-                      key={i}
-                      className="suggestion-chip"
-                      onClick={() => sendMessage(s.text)}
-                    >
-                      <span className="suggestion-icon">
+                    <button key={i} className="welcome-chip" onClick={() => sendMessage(s.text)}>
+                      <div className={`welcome-chip-icon ${s.color}`}>
                         <s.icon size={14} />
-                      </span>
+                      </div>
                       {s.text}
                     </button>
                   ))}
@@ -116,42 +90,38 @@ export function Chat() {
             ))}
 
             {isLoading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                <Loader size={14} style={{ animation: 'spin 1.5s linear infinite' }} />
-                Thinking...
+              <div className="typing-row">
+                <div className="msg-avatar ai-av"><Bot size={14} /></div>
+                <div className="typing-dots">
+                  <span /><span /><span />
+                </div>
               </div>
             )}
             <div ref={endRef} />
           </div>
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="input-row">
             {messages.length > 0 && (
-              <button className="glass-button new-chat-btn" onClick={handleNewChat}>
-                <Plus size={14} /> New
+              <button className="btn btn-sm" onClick={handleNewChat} title="Start new conversation">
+                <Plus size={13} /> New
               </button>
             )}
-            <form onSubmit={handleSubmit} className="input-area" style={{ flex: 1 }}>
+            <form onSubmit={handleSubmit} className="input-box">
               <textarea
-                className="chat-input"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask about customers, docs, or issues..."
                 rows={1}
                 disabled={isLoading}
               />
-              <button
-                type="submit"
-                className="glass-button primary"
-                disabled={!input.trim() || isLoading}
-                style={{ padding: '10px 12px' }}
-              >
-                <Send size={16} />
+              <button type="submit" className="send-btn" disabled={!input.trim() || isLoading}>
+                <Send size={15} />
               </button>
             </form>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
