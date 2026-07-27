@@ -155,12 +155,20 @@ async def admin_logs(limit: int = 50):
 # ------------------------------------------------------------------
 @app.post("/admin/compare", response_model=CompareResponse)
 async def admin_compare(req: CompareRequest):
-    """Run a tool via Direct path and return latencies (MCP path simulated)."""
-    from backend.agent.compare import _run_direct
+    """Run a tool via Direct path and return latencies."""
+    from backend.agent.compare import _run_direct, _run_mcp_async
     import json
 
     try:
         result_a, ms_a = _run_direct(req.tool_name, req.arguments)
+        
+        mcp_ms = None
+        mcp_error = None
+        try:
+            _, ms_b = await _run_mcp_async(req.tool_name, req.arguments)
+            mcp_ms = round(ms_b, 2)
+        except Exception as e:
+            mcp_error = str(e)
         
         # Determine result preview string
         preview = ""
@@ -179,8 +187,8 @@ async def admin_compare(req: CompareRequest):
         return CompareResponse(
             tool_name=req.tool_name,
             direct_ms=round(ms_a, 2),
-            mcp_ms=None,
-            mcp_error="MCP server client not connected (simulated)",
+            mcp_ms=mcp_ms,
+            mcp_error=mcp_error,
             result_preview=preview
         )
     except Exception as e:

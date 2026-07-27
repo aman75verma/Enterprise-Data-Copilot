@@ -1,4 +1,4 @@
-import { Database, LayoutDashboard, Code, MessageSquare, LogOut } from 'lucide-react';
+import { Database, LayoutDashboard, Code, MessageSquare } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 interface Props {
