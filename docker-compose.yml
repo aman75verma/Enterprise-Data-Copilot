@@ -21,6 +21,44 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - copilot_net
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: copilot-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql://copilot:copilot_pass@postgres:5432/copilot_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - copilot_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: copilot-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - copilot_net
 
 volumes:
   postgres_data:
+
+networks:
+  copilot_net:
+    driver: bridge
+
