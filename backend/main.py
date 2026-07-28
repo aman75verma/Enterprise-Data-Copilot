@@ -47,6 +47,24 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown hooks."""
+    # Ensure database schema is initialized (specifically for Render deployments)
+    from backend.db.pool import get_connection, put_connection
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            # Check if tables exist
+            cur.execute("SELECT to_regclass('public.customers');")
+            if cur.fetchone()[0] is None:
+                print("Database appears empty. Running schema.sql...")
+                schema_path = os.path.join(os.path.dirname(__file__), "db", "schema.sql")
+                with open(schema_path, "r") as f:
+                    cur.execute(f.read())
+                conn.commit()
+                print("Schema initialized successfully.")
+        put_connection(conn)
+    except Exception as e:
+        print(f"Warning: Failed to initialize schema on startup: {e}")
+
     yield
     close_pool()
 
