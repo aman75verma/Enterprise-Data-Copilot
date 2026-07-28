@@ -76,11 +76,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow the React frontend (Vite dev server)
+# CORS — allow the React frontend to communicate with the backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=["*"], # Allows Render frontend to connect
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
